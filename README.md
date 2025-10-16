@@ -1,363 +1,491 @@
-# Документация API
-
-## Описание
-API предоставляет функционал для управления платежами и получения информации о балансе. Все запросы к API выполняются через защищённое соединение по протоколу HTTPS. Для аутентификации используется механизм HMAC-SHA256 с использованием публичного и секретного ключей. Все ответы возвращаются в формате JSON.
+# Документация Payment API
 
 ## Базовый URL
-```
-https://warren.su/api/v1
-```
+https://warren.su/api/
 
 ## Аутентификация
-Для доступа к API требуется аутентификация по схеме HMAC-SHA256. Необходимо передать публичный ключ, временную метку и подпись в заголовках запроса. Формат заголовков следующий:
+Все запросы требуют заголовки:
+- X-Public-Key: Публичный ключ партнера
+- X-Secret-Key: Секретный ключ партнера
 
-```
-X-Public-Key: public_key_партнера
-X-Timestamp: 1642252800 (Unix timestamp)
-X-Signature: HMAC-SHA256 подпись
-```
+---
 
-### Процесс формирования подписи
-1. Соберите строку для подписи: `public_key + timestamp + body`, где:
-   - `public_key` — публичный ключ партнёра.
-   - `timestamp` — Unix-временная метка (в секундах).
-   - `body` — тело запроса в виде строки (для GET-запросов — пустая строка).
-2. Подпишите полученную строку с помощью секретного ключа (Secret Key) алгоритмом HMAC-SHA256:  
-   ```php
-   hash_hmac('sha256', $string, $secret_key)
-   ```
-3. Передайте результат в заголовке `X-Signature`.
+## 📊 1. Получение баланса
 
-### Пример формирования подписи
-```php
-$public_key = "your_public_key";
-$secret_key = "your_secret_key";
-$timestamp = "1642252800";
-$body = '{"amount":"100.00","currency":"USDT","internal_payment_uuid":"partner-uuid-12345","internal_client_id":"client-67890"}';
-$string_to_sign = $public_key . $timestamp . $body;
-$signature = hash_hmac('sha256', $string_to_sign, $secret_key);
-```
+GET /balance
 
-## Эндпоинты
+Получение текущего баланса партнера в USDT.
 
-### 1.1 Создание платежа
-**Метод:** POST  
-**Путь:** `/payment/create`  
-**Описание:** Создаёт новый платёж в системе. Требуется указать сумму, валюту, уникальный идентификатор платежа и идентификатор клиента.
+### Пример запроса (cURL)
+curl -X GET "https://warren.su/api/balance" \
+  -H "X-Public-Key: ваш_публичный_ключ" \
+  -H "X-Secret-Key: ваш_секретный_ключ"
 
-#### Тело запроса
-```json
-{
-  "amount": "100.00",
-  "currency": "USDT",
-  "internal_payment_uuid": "partner-uuid-12345",
-  "internal_client_id": "client-67890"
+### JavaScript (fetch API)
+/**
+ * Получение баланса партнера
+ * @param {string} publicKey - Публичный ключ
+ * @param {string} secretKey - Секретный ключ
+ * @returns {Promise<Object>} Промис с данными баланса
+ */
+async function getBalance(publicKey, secretKey) {
+    try {
+        const response = await fetch('https://warren.su/api/balance', {
+            method: 'GET',
+            headers: {
+                'X-Public-Key': publicKey,
+                'X-Secret-Key': secretKey,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            const balance = data.balance;
+            console.log('Основной баланс:', balance.balance_usdt, 'USDT');
+            console.log('Авансовый депозит:', balance.deposit_usdt, 'USDT');
+            return data;
+        } else {
+            throw new Error(data.message || 'Неизвестная ошибка');
+        }
+    } catch (error) {
+        console.error('Ошибка получения баланса:', error.message);
+        throw error;
+    }
 }
-```
 
-- **amount**: Сумма платежа (строка, формат десятичного числа).
-- **currency**: Валюта платежа (например, "USDT").
-- **internal_payment_uuid**: Уникальный идентификатор платежа на стороне партнёра.
-- **internal_client_id**: Уникальный идентификатор клиента на стороне партнёра.
+// Использование
+getBalance('ваш_публичный_ключ', 'ваш_секретный_ключ')
+    .then(result => console.log('Баланс получен:', result))
+    .catch(error => console.error('Ошибка:', error));
 
-#### Пример запроса (PHP)
-```php
-<?php
-$public_key = "your_public_key";
-$secret_key = "your_secret_key";
-$timestamp = time();
-$data = [
-    "amount" => "100.00",
-    "currency" => "USDT",
-    "internal_payment_uuid" => "partner-uuid-12345",
-    "internal_client_id" => "client-67890"
-];
-$body = json_encode($data);
-$string_to_sign = $public_key . $timestamp . $body;
-$signature = hash_hmac('sha256', $string_to_sign, $secret_key);
+### Успешный ответ
+{
+    "status": "success",
+    "balance": {
+        "balance_usdt": "4750.832949",
+        "deposit_usdt": "9999.881664"
+    }
+}
 
-$ch = curl_init("https://warren.su/api/v1/payment/create");
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    "X-Public-Key: $public_key",
-    "X-Timestamp: $timestamp",
-    "X-Signature: $signature",
-    "Content-Type: application/json"
-]);
+### Описание полей
+Поле              | Тип     | Описание
+------------------|---------|-----------
+balance_usdt      | decimal | Основной баланс в USDT (заработанные средства от успешных платежей)
+deposit_usdt      | decimal | Авансовый депозит в USDT (предоплаченные средства для мгновенных выплат)
 
-$response = curl_exec($ch);
-curl_close($ch);
-echo $response;
-?>
-```
+### 💡 Пояснение
+- balance_usdt - накопленные средства от оплаченных транзакций
+- deposit_usdt - средства, внесенные заранее для ускорения выплат
 
-#### Пример запроса (JavaScript Fetch)
-```javascript
-const publicKey = "your_public_key";
-const secretKey = "your_secret_key";
-const timestamp = Math.floor(Date.now() / 1000);
-const data = {
-    amount: "100.00",
-    currency: "USDT",
-    internal_payment_uuid: "partner-uuid-12345",
-    internal_client_id: "client-67890"
+---
+
+## 💳 2. Создание транзакции
+
+POST /transactions
+
+Создание новой платежной транзакции и генерация QR-кода.
+
+### Параметры запроса
+Параметр      | Тип     | Обязательный | Описание
+--------------|---------|--------------|-----------
+amount        | decimal | ✅           | Сумма платежа в RUB
+currency      | string  | ✅           | Всегда "RUB"
+internal_uuid | string  | ✅           | Уникальный ID заказа в вашей системе
+client_id     | string  | ✅           | ID клиента в вашей системе
+
+### Пример запроса (cURL)
+curl -X POST "https://warren.su/api/transactions" \
+  -H "X-Public-Key: ваш_публичный_ключ" \
+  -H "X-Secret-Key: ваш_секретный_ключ" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": "1000.00",
+    "currency": "RUB",
+    "internal_uuid": "order-12345",
+    "client_id": "client-001"
+  }'
+
+### JavaScript (fetch API)
+/**
+ * Создание новой платежной транзакции
+ * @param {string} publicKey - Публичный ключ
+ * @param {string} secretKey - Секретный ключ
+ * @param {Object} orderData - Данные заказа
+ * @returns {Promise<Object>} Промис с данными транзакции
+ */
+async function createTransaction(publicKey, secretKey, orderData) {
+    try {
+        const transactionData = {
+            ...orderData,
+            internal_uuid: orderData.internal_uuid || `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            currency: 'RUB'
+        };
+
+        const response = await fetch('https://warren.su/api/transactions', {
+            method: 'POST',
+            headers: {
+                'X-Public-Key': publicKey,
+                'X-Secret-Key': secretKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(transactionData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            const transaction = result.transaction;
+            console.log('Транзакция создана:', transaction.transaction_uuid);
+            
+            return {
+                success: true,
+                paymentLink: transaction.sbp_payment_link,
+                transactionId: transaction.transaction_uuid,
+                status: transaction.status,
+                partnerAmount: transaction.partner_amount_usd
+            };
+        } else {
+            throw new Error(result.message || 'Ошибка создания транзакции');
+        }
+    } catch (error) {
+        console.error('Ошибка создания транзакции:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Использование
+const orderData = {
+    amount: '1000.00',
+    client_id: 'client-001'
 };
-const body = JSON.stringify(data);
 
-// Функция для создания HMAC-SHA256 подписи
-async function createHmacSignature(key, message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const keyBuffer = new TextEncoder().encode(key);
-    const cryptoKey = await crypto.subtle.importKey(
-        "raw", keyBuffer, { name: "HMAC", hash: "SHA-256" },
-        false, ["sign"]
-    );
-    const signature = await crypto.subtle.sign("HMAC", cryptoKey, msgBuffer);
-    return Array.from(new Uint8Array(signature))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-}
-
-const stringToSign = publicKey + timestamp + body;
-createHmacSignature(secretKey, stringToSign).then(signature => {
-    fetch("https://warren.su/api/v1/payment/create", {
-        method: "POST",
-        headers: {
-            "X-Public-Key": publicKey,
-            "X-Timestamp": timestamp,
-            "X-Signature": signature,
-            "Content-Type": "application/json"
-        },
-        body: body
-    })
-    .then(response => response.json())
-    .then(data => console.log(data))
-    .catch(error => console.error("Error:", error));
-});
-```
-
-#### Успешный ответ (200)
-```json
-{
-  "status": "success",
-  "data": {
-    "transaction_uuid": "0dad0aaf-71bc-47ef-b608-b319d0c2eadc",
-    "operation_number": "7437-2298-1389-3977",
-    "qr_code_id": "70910725667409975299455889568227",
-    "sbp_url": "https://qr.nspk.ru/xxx",
-    "amount": "100.00",
-    "currency": "USDT",
-    "exchange_rate": "89.45",
-    "partner_amount": "98.50",
-    "commission_percent": "1.5",
-    "status": "pending",
-    "created_at": "2024-01-15T12:00:00Z"
-  }
-}
-```
-
-- **transaction_uuid**: Уникальный идентификатор транзакции в системе.
-- **operation_number**: Номер операции.
-- **qr_code_id**: Идентификатор QR-кода для оплаты.
-- **sbp_url**: Ссылка на QR-код для оплаты через СБП.
-- **amount**: Сумма платежа.
-- **currency**: Валюта платежа.
-- **exchange_rate**: Курс обмена.
-- **partner_amount**: Сумма, зачисленная партнёру после вычета комиссии.
-- **commission_percent**: Процент комиссии.
-- **status**: Статус платежа (например, "pending").
-- **created_at**: Дата и время создания платежа (в формате ISO 8601).
-
-### 1.2 Получение статуса транзакции
-**Метод:** GET  
-**Путь:** `/payment/status/{internal_payment_uuid}`  
-**Описание:** Возвращает информацию о статусе платежа по его уникальному идентификатору.
-
-#### Пример запроса (PHP)
-```php
-<?php
-$public_key = "your_public_key";
-$secret_key = "your_secret_key";
-$timestamp = time();
-$internal_payment_uuid = "partner-uuid-12345";
-$body = "";
-$string_to_sign = $public_key . $timestamp . $body;
-$signature = hash_hmac('sha256', $string_to_sign, $secret_key);
-
-$ch = curl_init("https://warren.su/api/v1/payment/status/$internal_payment_uuid");
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    "X-Public-Key: $public_key",
-    "X-Timestamp: $timestamp",
-    "X-Signature: $signature"
-]);
-
-$response = curl_exec($ch);
-curl_close($ch);
-echo $response;
-?>
-```
-
-#### Пример запроса (JavaScript Fetch)
-```javascript
-const publicKey = "your_public_key";
-const secretKey = "your_secret_key";
-const timestamp = Math.floor(Date.now() / 1000);
-const internalPaymentUuid = "partner-uuid-12345";
-const body = "";
-
-// Функция для создания HMAC-SHA256 подписи
-async function createHmacSignature(key, message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const keyBuffer = new TextEncoder().encode(key);
-    const cryptoKey = await crypto.subtle.importKey(
-        "raw", keyBuffer, { name: "HMAC", hash: "SHA-256" },
-        false, ["sign"]
-    );
-    const signature = await crypto.subtle.sign("HMAC", cryptoKey, msgBuffer);
-    return Array.from(new Uint8Array(signature))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-}
-
-const stringToSign = publicKey + timestamp + body;
-createHmacSignature(secretKey, stringToSign).then(signature => {
-    fetch(`https://warren.su/api/v1/payment/status/${internalPaymentUuid}`, {
-        method: "GET",
-        headers: {
-            "X-Public-Key": publicKey,
-            "X-Timestamp": timestamp,
-            "X-Signature": signature
+createTransaction('ваш_публичный_ключ', 'ваш_секретный_ключ', orderData)
+    .then(result => {
+        if (result.success) {
+            console.log('Ссылка для оплаты:', result.paymentLink);
+            window.open(result.paymentLink, '_blank');
+        } else {
+            alert('Ошибка: ' + result.error);
         }
-    })
-    .then(response => response.json())
-    .then(data => console.log(data))
-    .catch(error => console.error("Error:", error));
-});
-```
+    });
 
-#### Успешный ответ (200)
-```json
+### Успешный ответ
 {
-  "status": "success",
-  "data": {
-    "transaction_uuid": "0dad0aaf-71bc-47ef-b608-b319d0c2eadc",
-    "internal_payment_uuid": "partner-uuid-12345",
-    "internal_client_id": "client-67890",
-    "amount": "100.00",
-    "currency": "USDT",
-    "exchange_rate": "89.45",
-    "partner_amount": "98.50",
-    "commission_percent": "1.5",
-    "status": "paid",
-    "operation_number": "7437-2298-1389-3977",
-    "created_at": "2024-01-15T12:00:00Z",
-    "details_issued_at": "2024-01-15T12:00:01Z",
-    "paid_at": "2024-01-15T12:05:30Z"
-  }
-}
-```
-
-- **transaction_uuid**: Уникальный идентификатор транзакции.
-- **internal_payment_uuid**: Идентификатор платежа на стороне партнёра.
-- **internal_client_id**: Идентификатор клиента на стороне партнёра.
-- **amount**: Сумма платежа.
-- **currency**: Валюта платежа.
-- **exchange_rate**: Курс обмена.
-- **partner_amount**: Сумма, зачисленная партнёру.
-- **commission_percent**: Процент комиссии.
-- **status**: Статус платежа (например, "paid").
-- **operation_number**: Номер операции.
-- **created_at**: Дата создания платежа.
-- **details_issued_at**: Дата выдачи деталей платежа.
-- **paid_at**: Дата оплаты (если применимо).
-
-### 1.3 Получение баланса
-**Метод:** GET  
-**Путь:** `/balance`  
-**Описание:** Возвращает текущий баланс партнёра, включая доступный и замороженный баланс.
-
-#### Пример запроса (PHP)
-```php
-<?php
-$public_key = "your_public_key";
-$secret_key = "your_secret_key";
-$timestamp = time();
-$body = "";
-$string_to_sign = $public_key . $timestamp . $body;
-$signature = hash_hmac('sha256', $string_to_sign, $secret_key);
-
-$ch = curl_init("https://warren.su/api/v1/balance");
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    "X-Public-Key: $public_key",
-    "X-Timestamp: $timestamp",
-    "X-Signature: $signature"
-]);
-
-$response = curl_exec($ch);
-curl_close($ch);
-echo $response;
-?>
-```
-
-#### Пример запроса (JavaScript Fetch)
-```javascript
-const publicKey = "your_public_key";
-const secretKey = "your_secret_key";
-const timestamp = Math.floor(Date.now() / 1000);
-const body = "";
-
-// Функция для создания HMAC-SHA256 подписи
-async function createHmacSignature(key, message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const keyBuffer = new TextEncoder().encode(key);
-    const cryptoKey = await crypto.subtle.importKey(
-        "raw", keyBuffer, { name: "HMAC", hash: "SHA-256" },
-        false, ["sign"]
-    );
-    const signature = await crypto.subtle.sign("HMAC", cryptoKey, msgBuffer);
-    return Array.from(new Uint8Array(signature))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
+    "status": "success",
+    "transaction": {
+        "transaction_uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "amount": "1000.00",
+        "partner_amount": "980.00",
+        "partner_amount_usd": "11.200000",
+        "usdt_rate": "87.5000",
+        "partner_fee_percent": "2.00",
+        "status": "details_issued",
+        "internal_uuid": "order-12345",
+        "operation_number": "OP123456789",
+        "operation_id": "op_abc123",
+        "qr_code_id": "qr_xyz789",
+        "sbp_payment_link": "https://qrpay.link/pay/op_abc123",
+        "webhook_setup": true
+    }
 }
 
-const stringToSign = publicKey + timestamp + body;
-createHmacSignature(secretKey, stringToSign).then(signature => {
-    fetch("https://warren.su/api/v1/balance", {
-        method: "GET",
-        headers: {
-            "X-Public-Key": publicKey,
-            "X-Timestamp": timestamp,
-            "X-Signature": signature
+### 💡 Важные моменты
+- internal_uuid должен быть уникальным для каждой транзакции
+- При успешном создании сразу генерируется QR-код
+- Статус details_issued означает что платежные данные готовы
+- Webhook настроен автоматически для уведомлений об оплате
+
+---
+
+## 🔍 3. Проверка статуса транзакции
+
+GET /status?internal_uuid={ваш_internal_uuid}
+
+Получение текущего статуса и деталей транзакции.
+
+### Пример запроса (cURL)
+curl -X GET "https://warren.su/api/status?internal_uuid=order-12345" \
+  -H "X-Public-Key: ваш_публичный_ключ" \
+  -H "X-Secret-Key: ваш_секретный_ключ"
+
+### JavaScript (fetch API)
+/**
+ * Проверка статуса транзакции
+ * @param {string} publicKey - Публичный ключ
+ * @param {string} secretKey - Секретный ключ
+ * @param {string} internalUUID - Internal UUID транзакции
+ * @returns {Promise<Object>} Промис с данными статуса
+ */
+async function getTransactionStatus(publicKey, secretKey, internalUUID) {
+    try {
+        const response = await fetch(
+            `https://warren.su/api/status?internal_uuid=${encodeURIComponent(internalUUID)}`,
+            {
+                method: 'GET',
+                headers: {
+                    'X-Public-Key': publicKey,
+                    'X-Secret-Key': secretKey,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    })
-    .then(response => response.json())
-    .then(data => console.log(data))
-    .catch(error => console.error("Error:", error));
-});
-```
 
-#### Успешный ответ (200)
-```json
-{
-  "status": "success",
-  "data": {
-    "balance": "15000.75",
-    "frozen_balance": "2500.00",
-    "currency": "USDT"
-  }
+        const status = await response.json();
+
+        if (status.status === 'success') {
+            const transaction = status.transaction;
+            console.log('Статус платежа:', transaction.status);
+            
+            switch (transaction.status) {
+                case 'paid':
+                    console.log('✅ Платеж успешно оплачен:', transaction.paid_at);
+                    handleSuccessfulPayment(internalUUID, transaction);
+                    break;
+                case 'details_issued':
+                    console.log('⏳ Ожидает оплаты');
+                    console.log('Ссылка:', transaction.sbp_payment_link);
+                    break;
+                case 'pending':
+                    console.log('⏳ Генерируется QR-код');
+                    break;
+                case 'timeout':
+                    console.log('❌ Время оплаты истекло');
+                    break;
+            }
+            return status;
+        } else {
+            throw new Error(status.message || 'Транзакция не найдена');
+        }
+    } catch (error) {
+        console.error('Ошибка проверки статуса:', error);
+        throw error;
+    }
 }
-```
 
-- **balance**: Доступный баланс.
-- **frozen_balance**: Замороженный баланс.
-- **currency**: Валюта баланса.
+// Периодическая проверка
+function checkTransactionPeriodically(publicKey, secretKey, internalUUID, interval = 5000) {
+    const checkInterval = setInterval(async () => {
+        try {
+            const result = await getTransactionStatus(publicKey, secretKey, internalUUID);
+            if (result.status === 'success' && result.transaction.status === 'paid') {
+                clearInterval(checkInterval);
+                console.log('Платеж завершен!');
+            }
+        } catch (error) {
+            console.error('Ошибка проверки:', error);
+            clearInterval(checkInterval);
+        }
+    }, interval);
+    return () => clearInterval(checkInterval);
+}
 
-## Коды ошибок
-- **400** - Неверные данные в запросе.
-- **401** - Неавторизован (ошибка аутентификации).
-- **404** - Транзакция не найдена.
-- **500** - Внутренняя ошибка сервера.
+### Успешный ответ
+{
+    "status": "success",
+    "transaction": {
+        "transaction_uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "amount": "1000.00",
+        "partner_amount": "980.00",
+        "partner_amount_usd": "11.200000",
+        "status": "paid",
+        "internal_uuid": "order-12345",
+        "client_id": "client-001",
+        "sbp_payment_link": "https://qrpay.link/pay/op_abc123",
+        "created_at": "2024-01-15 10:30:00",
+        "paid_at": "2024-01-15 10:35:22"
+    }
+}
+
+### 📊 Статусы транзакций
+Статус         | Описание
+---------------|-----------
+pending        | Транзакция создана, ожидает генерации QR
+details_issued | QR-код сгенерирован, ожидает оплаты
+paid           | Транзакция успешно оплачена
+timeout        | Время оплаты истекло
+
+---
+
+## 🩺 4. Health Check
+
+GET /health
+
+Проверка работоспособности API и подключения к базе данных.
+
+### Пример запроса (cURL)
+curl -X GET "https://warren.su/api/health"
+
+### JavaScript (fetch API)
+/**
+ * Проверка работоспособности API
+ */
+async function checkHealth() {
+    try {
+        const response = await fetch('https://warren.su/api/health', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: Service unavailable`);
+        }
+
+        const health = await response.json();
+
+        if (health.status === 'success') {
+            console.log('✅ API работает нормально');
+            console.log('База данных:', health.database);
+            console.log('Окружение:', health.environment);
+            return health;
+        } else {
+            throw new Error(health.message || 'Health check failed');
+        }
+    } catch (error) {
+        console.error('❌ Проблемы с API:', error.message);
+        throw error;
+    }
+}
+
+// Периодический мониторинг
+function startHealthMonitoring(interval = 30000) {
+    setInterval(async () => {
+        try {
+            await checkHealth();
+            console.log('Health check passed');
+        } catch (error) {
+            console.error('Health check failed:', error);
+        }
+    }, interval);
+}
+
+### Успешный ответ
+{
+    "status": "success",
+    "message": "API is working",
+    "database": "connected",
+    "tables": {
+        "partners": "exists",
+        "transactions": "exists"
+    },
+    "timestamp": "2024-01-15T10:30:00+00:00",
+    "environment": "production"
+}
+
+---
+
+## ⚠️ Обработка ошибок
+
+### Общие коды ошибок
+Код | Описание
+----|-----------
+400 | Неверные параметры запроса
+401 | Ошибка аутентификации
+404 | Транзакция не найдена
+405 | Метод не поддерживается
+409 | Дублирующийся internal_uuid
+500 | Внутренняя ошибка сервера
+
+### Универсальный обработчик ошибок
+async function handleApiError(response, operation) {
+    let errorMessage = `Ошибка ${operation}: HTTP ${response.status}`;
+    
+    try {
+        const errorData = await response.json();
+        errorMessage += ` - ${errorData.message || 'Неизвестная ошибка'}`;
+    } catch (e) {}
+
+    switch (response.status) {
+        case 400:
+            console.error('❌ Неверные параметры');
+            break;
+        case 401:
+            console.error('❌ Ошибка аутентификации');
+            break;
+        case 404:
+            console.error('❌ Транзакция не найдена');
+            break;
+        case 409:
+            console.error('❌ Дублирующийся заказ');
+            break;
+        case 500:
+            console.error('❌ Ошибка сервера');
+            break;
+    }
+    throw new Error(errorMessage);
+}
+
+### Формат ошибки
+{
+    "status": "error",
+    "message": "Описание ошибки"
+}
+
+---
+
+## 🔄 Типичный workflow оплаты (JavaScript)
+
+class PaymentService {
+    constructor(publicKey, secretKey) {
+        this.publicKey = publicKey;
+        this.secretKey = secretKey;
+    }
+
+    async processPayment(orderData) {
+        try {
+            // Валидация
+            if (!orderData.amount || parseFloat(orderData.amount) <= 0) {
+                throw new Error('Неверная сумма');
+            }
+
+            // Создание транзакции
+            const result = await createTransaction(this.publicKey, this.secretKey, orderData);
+            
+            if (!result.success) {
+                throw new Error(result.error);
+            }
+
+            // Сохранение данных
+            localStorage.setItem(`tx_${orderData.internal_uuid}`, JSON.stringify(result));
+            
+            // Запуск мониторинга
+            checkTransactionPeriodically(this.publicKey, this.secretKey, orderData.internal_uuid);
+            
+            // Перенаправление на оплату
+            window.open(result.paymentLink, '_blank');
+            
+            return result;
+        } catch (error) {
+            console.error('Ошибка платежа:', error);
+            alert('Ошибка: ' + error.message);
+            return { success: false, error: error.message };
+        }
+    }
+}
+
+// Использование
+const paymentService = new PaymentService('ваш_публичный_ключ', 'ваш_секретный_ключ');
+
+const order = {
+    amount: '1500.00',
+    client_id: 'user-123',
+    internal_uuid: `order-${Date.now()}`
+};
+
+paymentService.processPayment(order)
+    .then(result => console.log('Платеж инициирован:', result));
+
