@@ -10,8 +10,7 @@ https://warren.su/api/
 
 ---
 
-## 📊 1. Получение баланса
-
+## 1. Получение баланса
 GET /balance
 
 Получение текущего баланса партнера в USDT.
@@ -74,30 +73,25 @@ getBalance('ваш_публичный_ключ', 'ваш_секретный_кл
 }
 
 ### Описание полей
-Поле              | Тип     | Описание
-------------------|---------|-----------
-balance_usdt      | decimal | Основной баланс в USDT (заработанные средства от успешных платежей)
-deposit_usdt      | decimal | Авансовый депозит в USDT (предоплаченные средства для мгновенных выплат)
-
-### 💡 Пояснение
-- balance_usdt - накопленные средства от оплаченных транзакций
-- deposit_usdt - средства, внесенные заранее для ускорения выплат
+Поле | Тип | Описание
+-----|-----|----------
+balance_usdt | decimal | Основной баланс в USDT (заработанные средства от успешных платежей)
+deposit_usdt | decimal | Авансовый депозит в USDT (предоплаченные средства для мгновенных выплат)
 
 ---
 
-## 💳 2. Создание транзакции
-
+## 2. Создание транзакции
 POST /transactions
 
 Создание новой платежной транзакции и генерация QR-кода.
 
 ### Параметры запроса
-Параметр      | Тип     | Обязательный | Описание
---------------|---------|--------------|-----------
-amount        | decimal | ✅           | Сумма платежа в RUB
-currency      | string  | ✅           | Всегда "RUB"
-internal_uuid | string  | ✅           | Уникальный ID заказа в вашей системе
-client_id     | string  | ✅           | ID клиента в вашей системе
+Параметр | Тип | Обязательный | Описание
+---------|-----|--------------|----------
+amount | decimal | Да | Сумма платежа в RUB
+currency | string | Да | Всегда "RUB"
+internal_uuid | string | Да | Уникальный ID заказа в вашей системе
+client_id | string | Да | ID клиента в вашей системе
 
 ### Пример запроса (cURL)
 curl -X POST "https://warren.su/api/transactions" \
@@ -200,7 +194,7 @@ createTransaction('ваш_публичный_ключ', 'ваш_секретны
     }
 }
 
-### 💡 Важные моменты
+### Важные моменты
 - internal_uuid должен быть уникальным для каждой транзакции
 - При успешном создании сразу генерируется QR-код
 - Статус details_issued означает что платежные данные готовы
@@ -208,8 +202,7 @@ createTransaction('ваш_публичный_ключ', 'ваш_секретны
 
 ---
 
-## 🔍 3. Проверка статуса транзакции
-
+## 3. Проверка статуса транзакции
 GET /status?internal_uuid={ваш_internal_uuid}
 
 Получение текущего статуса и деталей транзакции.
@@ -253,18 +246,17 @@ async function getTransactionStatus(publicKey, secretKey, internalUUID) {
             
             switch (transaction.status) {
                 case 'paid':
-                    console.log('✅ Платеж успешно оплачен:', transaction.paid_at);
-                    handleSuccessfulPayment(internalUUID, transaction);
+                    console.log('Платеж успешно оплачен:', transaction.paid_at);
                     break;
                 case 'details_issued':
-                    console.log('⏳ Ожидает оплаты');
+                    console.log('Ожидает оплаты');
                     console.log('Ссылка:', transaction.sbp_payment_link);
                     break;
                 case 'pending':
-                    console.log('⏳ Генерируется QR-код');
+                    console.log('Генерируется QR-код');
                     break;
                 case 'timeout':
-                    console.log('❌ Время оплаты истекло');
+                    console.log('Время оплаты истекло');
                     break;
             }
             return status;
@@ -311,18 +303,17 @@ function checkTransactionPeriodically(publicKey, secretKey, internalUUID, interv
     }
 }
 
-### 📊 Статусы транзакций
-Статус         | Описание
----------------|-----------
-pending        | Транзакция создана, ожидает генерации QR
+### Статусы транзакций
+Статус | Описание
+-------|----------
+pending | Транзакция создана, ожидает генерации QR
 details_issued | QR-код сгенерирован, ожидает оплаты
-paid           | Транзакция успешно оплачена
-timeout        | Время оплаты истекло
+paid | Транзакция успешно оплачена
+timeout | Время оплаты истекло
 
 ---
 
-## 🩺 4. Health Check
-
+## 4. Health Check
 GET /health
 
 Проверка работоспособности API и подключения к базе данных.
@@ -348,29 +339,16 @@ async function checkHealth() {
         const health = await response.json();
 
         if (health.status === 'success') {
-            console.log('✅ API работает нормально');
+            console.log('API работает нормально');
             console.log('База данных:', health.database);
-            console.log('Окружение:', health.environment);
             return health;
         } else {
             throw new Error(health.message || 'Health check failed');
         }
     } catch (error) {
-        console.error('❌ Проблемы с API:', error.message);
+        console.error('Проблемы с API:', error.message);
         throw error;
     }
-}
-
-// Периодический мониторинг
-function startHealthMonitoring(interval = 30000) {
-    setInterval(async () => {
-        try {
-            await checkHealth();
-            console.log('Health check passed');
-        } catch (error) {
-            console.error('Health check failed:', error);
-        }
-    }, interval);
 }
 
 ### Успешный ответ
@@ -388,46 +366,17 @@ function startHealthMonitoring(interval = 30000) {
 
 ---
 
-## ⚠️ Обработка ошибок
+## Обработка ошибок
 
-### Общие коды ошибок
+### Коды ошибок
 Код | Описание
-----|-----------
+----|----------
 400 | Неверные параметры запроса
 401 | Ошибка аутентификации
 404 | Транзакция не найдена
 405 | Метод не поддерживается
 409 | Дублирующийся internal_uuid
 500 | Внутренняя ошибка сервера
-
-### Универсальный обработчик ошибок
-async function handleApiError(response, operation) {
-    let errorMessage = `Ошибка ${operation}: HTTP ${response.status}`;
-    
-    try {
-        const errorData = await response.json();
-        errorMessage += ` - ${errorData.message || 'Неизвестная ошибка'}`;
-    } catch (e) {}
-
-    switch (response.status) {
-        case 400:
-            console.error('❌ Неверные параметры');
-            break;
-        case 401:
-            console.error('❌ Ошибка аутентификации');
-            break;
-        case 404:
-            console.error('❌ Транзакция не найдена');
-            break;
-        case 409:
-            console.error('❌ Дублирующийся заказ');
-            break;
-        case 500:
-            console.error('❌ Ошибка сервера');
-            break;
-    }
-    throw new Error(errorMessage);
-}
 
 ### Формат ошибки
 {
@@ -437,7 +386,7 @@ async function handleApiError(response, operation) {
 
 ---
 
-## 🔄 Типичный workflow оплаты (JavaScript)
+## Типичный workflow оплаты
 
 class PaymentService {
     constructor(publicKey, secretKey) {
@@ -447,25 +396,14 @@ class PaymentService {
 
     async processPayment(orderData) {
         try {
-            // Валидация
-            if (!orderData.amount || parseFloat(orderData.amount) <= 0) {
-                throw new Error('Неверная сумма');
-            }
-
-            // Создание транзакции
             const result = await createTransaction(this.publicKey, this.secretKey, orderData);
             
             if (!result.success) {
                 throw new Error(result.error);
             }
 
-            // Сохранение данных
             localStorage.setItem(`tx_${orderData.internal_uuid}`, JSON.stringify(result));
-            
-            // Запуск мониторинга
             checkTransactionPeriodically(this.publicKey, this.secretKey, orderData.internal_uuid);
-            
-            // Перенаправление на оплату
             window.open(result.paymentLink, '_blank');
             
             return result;
@@ -479,13 +417,9 @@ class PaymentService {
 
 // Использование
 const paymentService = new PaymentService('ваш_публичный_ключ', 'ваш_секретный_ключ');
-
 const order = {
     amount: '1500.00',
     client_id: 'user-123',
     internal_uuid: `order-${Date.now()}`
 };
-
-paymentService.processPayment(order)
-    .then(result => console.log('Платеж инициирован:', result));
-
+paymentService.processPayment(order);
